@@ -1,5 +1,5 @@
 export const COLORS = {
-  primary: '#3D1420', // O tom de vinho escuro do cabeçalho/botão
+  primary: '#3D1420',
   background: '#FFFFFF',
   text: '#333333',
   textLight: '#666666',

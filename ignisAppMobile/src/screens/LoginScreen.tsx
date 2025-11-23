@@ -9,8 +9,8 @@ import {
   KeyboardAvoidingView, 
   Platform 
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons'; // Para o ícone de fogo
-import { COLORS } from '../constants/themes'; // Importando as cores que definimos
+import { MaterialCommunityIcons } from '@expo/vector-icons'; 
+import { COLORS } from '../constants/themes'; 
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
@@ -58,7 +58,7 @@ export default function LoginScreen({ navigation }: any) {
 
           <TouchableOpacity 
             style={styles.button} 
-            onPress={() => navigation.replace('Home')}
+            onPress={() => navigation.replace('MainTabs')}
           >
             <Text style={styles.buttonText}>Entrar</Text>
           </TouchableOpacity>
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
   },
   button: {
-    backgroundColor: COLORS.primary, // Aquele vinho escuro
+    backgroundColor: COLORS.primary,
     height: 55,
     borderRadius: 8,
     justifyContent: 'center',
