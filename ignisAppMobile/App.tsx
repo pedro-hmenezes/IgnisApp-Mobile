@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import AppNavigator from './src/routes/AppNavigator';
 import { StatusBar } from 'react-native';
-import { COLORS } from './src/constants/themes';
+import { COLORS } from './src/constants/theme';
 
 export default function App() {
   return (

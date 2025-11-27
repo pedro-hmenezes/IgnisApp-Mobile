@@ -10,7 +10,7 @@ import {
   Platform 
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons'; 
-import { COLORS } from '../constants/themes'; 
+import { COLORS } from '../constants/theme'; 
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
@@ -26,9 +26,12 @@ export default function LoginScreen({ navigation }: any) {
         {/* 1. Logo e Título */}
         <View style={styles.headerContainer}>
           {/* Simulando o logo do Ignis Group */}
-          <MaterialCommunityIcons name="fire" size={60} color="#6A3A58" style={{alignSelf:'center'}} /> 
+          <Image 
+            source={require('../../assets/ignis-logo.png')}
+            style={styles.logo}
+            /> 
           
-          <Text style={styles.appTitle}>Ignis Group</Text>
+          <Text style={styles.appTitle}>Ignis</Text>
           <Text style={styles.subTitle}>Sistema de ocorrências - CBMPE</Text>
         </View>
 
@@ -89,7 +92,7 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     alignItems: 'center',
-    marginBottom: 50,
+    marginBottom: 40,
   },
   appTitle: {
     fontSize: 28,
@@ -148,5 +151,13 @@ const styles = StyleSheet.create({
   boldText: {
     fontWeight: 'bold',
     color: '#000'
-  }
+  },
+
+  logo: {
+  width: 90,
+  height: 90,
+  resizeMode: 'contain',
+  alignSelf: 'center',
+},
+
 });

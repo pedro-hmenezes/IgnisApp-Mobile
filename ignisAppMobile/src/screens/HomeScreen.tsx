@@ -1,52 +1,73 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
-import OccurrenceCard from '../screens/OccurrenceCard'; // Importe o componente novo
-import { COLORS } from '../constants/themes';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import OccurrenceCard from './OccurrenceCard';
+import { COLORS } from '../constants/theme';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-// Dados Fakes para teste visual (MOCK)
+// Dados simulados realistas para o teste
 const MOCK_DATA = [
+  // Esta primeira é a "Nova" que ele vai atender
   {
-    id: '1',
-    title: 'Vazamento na Tubulação',
-    status: 'Em andamento',
-    location: 'Sala 20',
-    time: '17:47'
+    id: '2594',
+    title: 'Incêndio em Residência',
+    status: 'Aberto', // Status que chama atenção
+    location: 'Rua do Sol, 142 - Centro',
+    time: 'Há 2 min',
+    victim: 'Carlos Edu (Idoso acamado)', // Dado extra pro Detalhes
+    type: 'Incêndio'
   },
+  // Estas são as antigas/outras
   {
-    id: '2',
-    title: 'Gatinho na Árvore',
+    id: '2590',
+    title: 'Captura de Animal',
     status: 'Concluída',
-    location: 'Rua da Aurora, 120',
-    time: '14:30'
-  },
-  {
-    id: '3',
-    title: 'Acidente de Carro',
-    status: 'Cancelada',
-    location: 'Av. Boa Viagem',
-    time: '10:00'
-  },
+    location: 'Av. Boa Viagem, 3000',
+    time: '09:30',
+    victim: 'Solicitante: Condomínio',
+    type: 'Resgate'
+  }
 ];
 
 export default function HomeScreen({ navigation }: any) {
+
+  // Card Especial de "Alerta" para a primeira ocorrência
+  const renderItem = ({ item, index }: any) => {
+    
+    // Se for o primeiro item, damos um destaque especial de "Novo Alerta"
+    if (index === 0 && item.status === 'Aberto') {
+        return (
+            <View style={styles.alertContainer}>
+                <View style={styles.alertHeader}>
+                    <MaterialCommunityIcons name="radio-tower" size={20} color="#fff" />
+                    <Text style={styles.alertTitle}>NOVA OCORRÊNCIA RECEBIDA</Text>
+                </View>
+                <OccurrenceCard 
+                    data={item} 
+                    onPress={() => navigation.navigate('Details', { occurrence: item })} 
+                />
+                <Text style={styles.alertInstruction}>Toque para aceitar e ver detalhes</Text>
+            </View>
+        );
+    }
+
+    // Cards normais
+    return (
+      <OccurrenceCard 
+        data={item} 
+        onPress={() => navigation.navigate('Details', { occurrence: item })} 
+      />
+    );
+  };
+
   return (
     <View style={styles.container}>
       <FlatList
         data={MOCK_DATA}
         keyExtractor={(item) => item.id}
+        renderItem={renderItem}
         contentContainerStyle={{ padding: 20 }}
-        // Renderiza cada item usando nosso componente Card
-        renderItem={({ item }) => (
-          <OccurrenceCard 
-            data={item as any} 
-            onPress={() => console.log('Clicou na ocorrência', item.id)} 
-          />
-        )}
-        // Caso a lista esteja vazia (Visual do Template 02)
-        ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Nenhuma Ocorrência em andamento</Text>
-            </View>
+        ListHeaderComponent={
+            <Text style={styles.listTitle}>Acioanamentos</Text>
         }
       />
     </View>
@@ -54,19 +75,28 @@ export default function HomeScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5', // Fundo cinza claro para destacar os cards brancos
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  listTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 10, marginLeft: 5 },
+  
+  // Estilo do "Container de Alerta"
+  alertContainer: {
+    backgroundColor: '#D32F2F22', // Fundo vermelho bem clarinho
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#D32F2F',
+    borderStyle: 'dashed'
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 50
+  alertHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#D32F2F',
+    padding: 5,
+    borderRadius: 5,
+    alignSelf: 'flex-start',
+    marginBottom: 10,
+    alignItems: 'center'
   },
-  emptyText: {
-      fontSize: 16,
-      fontWeight: 'bold',
-      color: '#333'
-  }
+  alertTitle: { color: '#fff', fontWeight: 'bold', fontSize: 12, marginLeft: 5 },
+  alertInstruction: { textAlign: 'center', color: '#D32F2F', fontSize: 12, marginTop: 5, fontWeight: 'bold' }
 });

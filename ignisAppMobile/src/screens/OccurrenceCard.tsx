@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS } from '../constants/themes';
+import { COLORS } from '../constants/theme';
 
 // Definindo o que o card precisa receber de dados
 interface OccurrenceCardProps {

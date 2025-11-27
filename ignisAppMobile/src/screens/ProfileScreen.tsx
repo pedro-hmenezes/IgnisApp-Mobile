@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS } from '../constants/themes';
+import { COLORS } from '../constants/theme';
 
 export default function ProfileScreen({ navigation }: any) {
   
@@ -9,24 +9,17 @@ export default function ProfileScreen({ navigation }: any) {
   const menuOptions = [
     { 
       id: '1', 
-      title: 'Mapa de Ocorrências', 
-      subtitle: 'Visualizar em tempo real',
-      icon: 'map-marker-radius',
-      target: 'MapScreen' // Futura tela
-    },
-    { 
-      id: '2', 
       title: 'Meus Relatórios', 
       subtitle: 'Histórico de atividades',
       icon: 'file-document-outline',
-      target: 'ReportsScreen' // Futura tela
+      target: 'Reports' 
     },
     { 
-      id: '3', 
+      id: '2', 
       title: 'Configurações', 
       subtitle: 'Tema, notificações, dados',
       icon: 'cog-outline',
-      target: '' 
+      target: 'Settings' 
     },
   ];
 
@@ -49,7 +42,7 @@ export default function ProfileScreen({ navigation }: any) {
       {/* Lista de Opções (O antigo Menu Lateral) */}
       <View style={styles.menuContainer}>
         {menuOptions.map((option) => (
-          <TouchableOpacity key={option.id} style={styles.menuItem}>
+          <TouchableOpacity key={option.id} style={styles.menuItem} onPress={() => option.target ? navigation.navigate(option.target) : null}>
             <View style={[styles.iconBox, { backgroundColor: '#f0f0f0' }]}>
               <MaterialCommunityIcons name={option.icon as any} size={24} color={COLORS.primary} />
             </View>
