@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator
 } from 'react-native';
+import { updateOccurrence } from '../services/occurrenceService';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 
@@ -40,7 +41,8 @@ export default function DetailsScreen({ route, navigation }: any) {
     ]);
   };
 
-  const handleSave = () => {
+const handleSave = async () => {
+    // 1. Validação Visual
     if (!vehicle) {
       Alert.alert("Campo Obrigatório", "Por favor, informe a viatura utilizada.");
       return;
@@ -53,12 +55,32 @@ export default function DetailsScreen({ route, navigation }: any) {
         { text: "Voltar", style: "cancel" },
         { 
           text: "Enviar Relatório", 
-          onPress: () => {
+          onPress: async () => {
             setIsSaving(true);
-            setTimeout(() => {
+            try {
+              // 2. Monta o objeto com os dados que o bombeiro preencheu
+              // Nota: Estamos assumindo que seu Banco aceita 'viatura', 'equipe', 'descricao'
+              const payload = {
+                viatura: vehicle,
+                equipe: team,
+                descricao: description,
+                statusGeral: 'finalizada' as const // Força a mudança de status
+              };
+
+              // 3. Chama a API Real
+              await updateOccurrence(occurrence.id, payload);
+
               setIsSaving(false);
-              navigation.goBack(); // Volta para a lista
-            }, 2000);
+              
+              // 4. Sucesso!
+              Alert.alert("Sucesso", "Ocorrência finalizada e sincronizada!", [
+                { text: "OK", onPress: () => navigation.goBack() }
+              ]);
+
+            } catch (error) {
+              setIsSaving(false);
+              Alert.alert("Erro", "Falha ao enviar dados. Tente novamente.");
+            }
           }
         }
       ]

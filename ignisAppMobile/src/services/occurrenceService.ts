@@ -11,3 +11,14 @@ export const getOccurrences = async (): Promise<Occurrence[]> => {
     throw error;
   }
 };
+
+export const updateOccurrence = async (id: string, data: Partial<Occurrence>) => {
+  try {
+    // Rota: /api/occurrences/:id
+    const response = await api.patch(`/occurrences/${id}`, data);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao atualizar ocorrência:', error);
+    throw error;
+  }
+};

@@ -33,18 +33,23 @@ export interface Solicitante {
 }
 
 export interface Occurrence {
-  _id: string; // MongoDB sempre manda _id
+  _id: string;
   numAviso: string;
   tipoOcorrencia: string;
-  // Datas vêm como string ISO via JSON (ex: "2025-12-03T10:00:00Z")
-  timestampRecebimento: string; 
+  timestampRecebimento: string;
   formaAcionamento: string;
   situacaoOcorrencia: string;
   naturezaInicial: string;
   endereco: Endereco;
   solicitante: Solicitante;
-  criadoPor: string; // ID do usuário que criou
+  criadoPor: string;
   statusGeral: 'em andamento' | 'finalizada' | 'cancelada';
+  
+  // ADICIONE ESSES CAMPOS NOVOS (Opcionais, pois no começo não existem)
+  viatura?: string;
+  equipe?: string;
+  descricao?: string; // ou "historico", dependendo de como está no seu Schema
+  
   createdAt?: string;
   updatedAt?: string;
 }

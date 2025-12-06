@@ -1,21 +1,21 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // <--- Importante
 import { COLORS } from '../constants/theme';
 
 export default function ProfileScreen({ navigation }: any) {
   
-  // Lista de opções que estariam no Menu Lateral
   const menuOptions = [
     { 
-      id: '1', 
+      id: '2', 
       title: 'Meus Relatórios', 
       subtitle: 'Histórico de atividades',
       icon: 'file-document-outline',
       target: 'Reports' 
     },
     { 
-      id: '2', 
+      id: '3', 
       title: 'Configurações', 
       subtitle: 'Tema, notificações, dados',
       icon: 'cog-outline',
@@ -23,9 +23,32 @@ export default function ProfileScreen({ navigation }: any) {
     },
   ];
 
+  // --- FUNÇÃO DE LOGOUT REAL ---
   const handleLogout = () => {
-    // Aqui limparemos o token de autenticação futuramente
-    navigation.replace('Login');
+    Alert.alert(
+      "Sair do Sistema",
+      "Tem certeza que deseja desconectar?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "Sair", 
+          onPress: async () => {
+            try {
+              // 1. Limpa o Token e os Dados do Usuário do celular
+              await AsyncStorage.multiRemove(['@ignis_token', '@ignis_user']);
+              
+              // 2. Reseta a navegação para que o usuário não possa voltar
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
+            } catch (error) {
+              Alert.alert("Erro", "Não foi possível fazer logout.");
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -35,14 +58,18 @@ export default function ProfileScreen({ navigation }: any) {
         <View style={styles.avatarContainer}>
           <MaterialCommunityIcons name="account" size={50} color="#fff" />
         </View>
-        <Text style={styles.userName}>Sgt. Silva</Text>
-        <Text style={styles.userRole}>Comandante de Equipe</Text>
+        <Text style={styles.userName}>Usuário Conectado</Text>
+        <Text style={styles.userRole}>Operador de Campo</Text>
       </View>
 
-      {/* Lista de Opções (O antigo Menu Lateral) */}
+      {/* Lista de Opções */}
       <View style={styles.menuContainer}>
         {menuOptions.map((option) => (
-          <TouchableOpacity key={option.id} style={styles.menuItem} onPress={() => option.target ? navigation.navigate(option.target) : null}>
+          <TouchableOpacity 
+            key={option.id} 
+            style={styles.menuItem}
+            onPress={() => option.target ? navigation.navigate(option.target) : null}
+          >
             <View style={[styles.iconBox, { backgroundColor: '#f0f0f0' }]}>
               <MaterialCommunityIcons name={option.icon as any} size={24} color={COLORS.primary} />
             </View>
@@ -54,7 +81,7 @@ export default function ProfileScreen({ navigation }: any) {
           </TouchableOpacity>
         ))}
 
-        {/* Botão de Sair Destacado */}
+        {/* Botão de Sair com Lógica Real */}
         <TouchableOpacity style={[styles.menuItem, { marginTop: 20 }]} onPress={handleLogout}>
           <View style={[styles.iconBox, { backgroundColor: '#ffebee' }]}>
             <MaterialCommunityIcons name="logout" size={24} color="#d32f2f" />
@@ -98,7 +125,6 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 12,
     marginBottom: 10,
-    // Sombra leve
     elevation: 2,
     shadowColor: '#000',
     shadowOpacity: 0.05,
