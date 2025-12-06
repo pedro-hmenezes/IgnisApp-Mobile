@@ -1,15 +1,20 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import AppNavigator from './src/routes/AppNavigator';
-import { StatusBar } from 'react-native';
-import { COLORS } from './src/constants/theme';
+import React from "react";
+import { StatusBar } from "react-native";
+import { NavigationContainer } from "@react-navigation/native";
+// IMPORTAR O PROVIDER
+import { SafeAreaProvider } from "react-native-safe-area-context";
+
+import AppNavigator from "./src/routes/AppNavigator";
+import { COLORS } from "./src/constants/theme";
 
 export default function App() {
   return (
-    <NavigationContainer>
-      {/* Configura a barra de status do celular para combinar com o app */}
-      <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
-      <AppNavigator />
-    </NavigationContainer>
+    // ENVOLVER TUDO COM SafeAreaProvider
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
+        <AppNavigator />
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
