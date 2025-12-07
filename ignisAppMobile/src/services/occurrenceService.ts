@@ -22,3 +22,15 @@ export const updateOccurrence = async (id: string, data: Partial<Occurrence>) =>
     throw error;
   }
 };
+
+export const getOccurrenceById = async (id: string): Promise<Occurrence> => {
+  try {
+    // Rota GET para buscar uma ocorrência específica
+    // Isso garante que receberemos o objeto completo (com solicitante, viatura, etc)
+    const response = await api.get(`/occurrences/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao buscar detalhes da ocorrência:', error);
+    throw error;
+  }
+};

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
-import { updateOccurrence } from '../services/occurrenceService';
+import { updateOccurrence, getOccurrenceById } from '../services/occurrenceService';
 
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
@@ -24,14 +24,52 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SignaturePad } from '../components/SignaturePad';
 import { SignatureDisplay } from '../components/SignatureDisplay';
 
-
 export default function DetailsScreen({ route, navigation }: any) {
-  // Pegamos o 'occurrence' que veio da lista
-  // 'originalData' contém o objeto bruto do MongoDB com todos os campos (solicitante, endereco, etc)
   const { occurrence } = route.params || {};
-  const data = occurrence?.originalData || {}; 
 
-  console.log("🔍 DADOS DO SOLICITANTE:", JSON.stringify(data.solicitante, null, 2));
+  // --- MUDANÇA 1: Estados para guardar os dados completos ---
+  const [fullData, setFullData] = useState<any>(null);
+  const [loadingData, setLoadingData] = useState(true);
+
+  // Pega o ID (tenta de todas as formas possíveis para não falhar)
+  const occurrenceId = occurrence?._id || occurrence?.originalData?._id || occurrence?.id;
+
+  // --- MUDANÇA 2: O Efeito que busca os dados no servidor ---
+  useEffect(() => {
+    let isActive = true;
+
+    const fetchDetails = async () => {
+      if (!occurrenceId) return;
+      try {
+        // Chama a função nova que criamos no Passo 1
+        const dataFromServer = await getOccurrenceById(occurrenceId);
+        
+        if (isActive && dataFromServer) {
+          console.log("✅ Dados completos atualizados! Solicitante:", dataFromServer.solicitante?.nome);
+          setFullData(dataFromServer);
+        }
+      } catch (error) {
+        console.log("⚠️ Erro ao atualizar detalhes, mantendo dados do cache.");
+      } finally {
+        if (isActive) setLoadingData(false);
+      }
+    };
+
+    fetchDetails();
+    return () => { isActive = false; };
+  }, [occurrenceId]);
+
+  // --- MUDANÇA 3: A Lógica de Prioridade ---
+  // Se tiver fullData (do servidor), usa ele. Se não, usa o que veio da lista (occurrence)
+  const rawData = fullData || occurrence?.originalData || occurrence || {};
+  
+  // Cria o objeto 'data' seguro
+  const data = {
+    ...rawData,
+    // Garante que solicitante é um objeto (para evitar o crash)
+    solicitante: rawData.solicitante || {}, 
+    endereco: rawData.endereco || {}
+  };
   
   const insets = useSafeAreaInsets();
 
@@ -188,13 +226,28 @@ export default function DetailsScreen({ route, navigation }: any) {
 
             <View style={styles.divider} />
 
-            {/* Solicitante / Vítima */}
+            {/* Solicitante / Vítima - ATUALIZADO */}
             <View style={styles.infoRow}>
               <MaterialCommunityIcons name="account-outline" size={20} color="#666" style={{ width: 25 }} />
               <View style={{flex: 1}}>
                 <Text style={styles.infoLabel}>Solicitante</Text>
-                <Text style={styles.infoValue}>{data.solicitante?.nome || 'Anônimo'}</Text>
-                <Text style={styles.infoSub}>{data.solicitante?.telefone || 'Sem telefone'}</Text>
+                
+                {/* Nome do Solicitante */}
+                <Text style={styles.infoValue}>
+                  {data.solicitante?.nome ?? 'Anônimo'}
+                </Text>
+
+                {/* Telefone */}
+                <Text style={styles.infoSub}>
+                  {data.solicitante?.telefone ?? 'Sem telefone'}
+                </Text>
+                
+                {/* Relação (Vítima, Testemunha, etc) - EM VERMELHO PARA DESTAQUE */}
+                {data.solicitante?.relacao && (
+                   <Text style={[styles.infoSub, { color: '#D32F2F', fontWeight: 'bold', marginTop: 2 }]}>
+                     ({data.solicitante.relacao})
+                   </Text>
+                )}
               </View>
             </View>
 
