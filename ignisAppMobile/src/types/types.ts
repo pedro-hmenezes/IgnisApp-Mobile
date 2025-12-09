@@ -24,6 +24,8 @@ export interface Endereco {
   bairro: string;
   municipio: string;
   referencia?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Solicitante {
@@ -49,6 +51,10 @@ export interface Occurrence {
   viatura?: string;
   equipe?: string;
   descricao?: string; // ou "historico", dependendo de como está no seu Schema
+  latitudeInicial?: number;
+  longitudeInicial?: number;
+  latitudeFinal?: number;
+  longitudeFinal?: number;
   
   createdAt?: string;
   updatedAt?: string;
