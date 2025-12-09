@@ -14,7 +14,9 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
-import { updateOccurrence, getOccurrenceById } from '../services/occurrenceService';
+import { updateOccurrence, getOccurrenceById, finalizeOccurrenceService } from '../services/occurrenceService';
+import { createSignature } from '../services/signatureService'; // Você precisará criar este arquivo
+import { uploadMedia } from '../services/mediaService';       // E este também
 
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
@@ -73,6 +75,9 @@ export default function DetailsScreen({ route, navigation }: any) {
   
   const insets = useSafeAreaInsets();
 
+  // Verifica se a ocorrência está finalizada
+  const isFinalized = (data.statusGeral || '').toLowerCase() === 'finalizada';
+
   // Estados do Formulário
   const [description, setDescription] = useState('');
   const [vehicle, setVehicle] = useState('');
@@ -88,6 +93,32 @@ export default function DetailsScreen({ route, navigation }: any) {
   const [signature, setSignature] = useState<string | null>(null);
   const [isSignaturePadVisible, setIsSignaturePadVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // --- EFEITO: Preenche os dados se já estiver finalizada ---
+  useEffect(() => {
+    if (isFinalized && fullData) {
+      setVehicle(fullData.viaturaEmpenhada || '');
+      setTeam(fullData.equipe || '');
+      setDescription(fullData.descricaoAcoes || '');
+      setSignature(fullData.assinatura?.signatureData || null);
+      
+      // Se tem coordenadas finais, cria o objeto location
+      if (fullData.latitudeFinal && fullData.longitudeFinal) {
+        setLocation({
+          coords: {
+            latitude: fullData.latitudeFinal,
+            longitude: fullData.longitudeFinal,
+            altitude: null,
+            accuracy: null,
+            altitudeAccuracy: null,
+            heading: null,
+            speed: null,
+          },
+          timestamp: Date.now(),
+        });
+      }
+    }
+  }, [isFinalized, fullData]);
 
   // --- FORMATAÇÃO DE DATA ---
   const formattedDate = data.timestampRecebimento 
@@ -133,35 +164,123 @@ export default function DetailsScreen({ route, navigation }: any) {
 
   // --- SALVAR ---
   const handleSave = async () => {
-    // Validação
-    const newErrors: { vehicle?: string; signature?: string } = {};
-    let isValid = true;
-    if (!vehicle.trim()) { newErrors.vehicle = "A identificação da viatura é obrigatória."; isValid = false; }
-    if (!signature) { newErrors.signature = "A assinatura do responsável é obrigatória."; isValid = false; }
-    setErrors(newErrors);
-
-    if (!isValid) {
-      Alert.alert("Dados Incompletos", "Verifique os campos em vermelho.");
+    // 1. Validação dos Campos Obrigatórios
+    if (!occurrenceId) {
+      Alert.alert("Erro", "ID da ocorrência não encontrado. Volte e tente novamente.");
       return;
     }
-    
-    Alert.alert("Finalizar", "Confirma o envio?", [
+    if (!vehicle.trim() || !team.trim() || !description.trim()) {
+      Alert.alert("Dados Incompletos", "Preencha Viatura, Equipe e Descrição.");
+      return;
+    }
+    if (!signature) {
+      Alert.alert("Dados Incompletos", "A assinatura é obrigatória.");
+      return;
+    }
+    if (!location) {
+      Alert.alert("Sem GPS", "Aguarde a captura do GPS ou clique para atualizar.");
+      return;
+    }
+
+    Alert.alert("Finalizar", "Confirma o envio do relatório?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Enviar", onPress: async () => {
+      { 
+        text: "Enviar", 
+        onPress: async () => {
           setIsSaving(true);
           try {
-            // Payload Seguro (Só status por enquanto)
-            const payload = { statusGeral: 'finalizada' as const };
-            console.log("📤 ENVIANDO:", { vehicle, team, photos: photos.length, signature: !!signature });
-            
-            await updateOccurrence(occurrence.id, payload);
+            // --- PASSO 1: UPLOAD DAS FOTOS (SE HOUVER) ---
+            let uploadedPhotoIds: string[] = [];
+
+            if (photos.length > 0) {
+              try {
+                console.log(`📸 Tentando subir ${photos.length} fotos...`);
+                
+                // Faz o upload de cada foto e guarda o ID retornado
+                const uploadPromises = photos.map(async (photoUri) => {
+                  const formData = new FormData();
+                  formData.append('occurrenceId', occurrenceId);
+                  formData.append('media', { 
+                    uri: photoUri, 
+                    type: 'image/jpeg', 
+                    name: `evid_${Date.now()}.jpg` 
+                  } as any);
+                  
+                  // Usa o serviço de upload que já configuramos
+                  const response = await uploadMedia(formData);
+                  return response.dados._id; // O back retorna o ID dentro de 'dados._id'
+                });
+
+                uploadedPhotoIds = await Promise.all(uploadPromises);
+                console.log("✅ IDs das fotos gerados:", uploadedPhotoIds);
+              } catch (uploadError: any) {
+                console.warn("⚠️ Erro no upload de fotos:", uploadError.message);
+                // Pergunta ao usuário se quer continuar sem as fotos
+                const continueWithoutPhotos = await new Promise<boolean>((resolve) => {
+                  Alert.alert(
+                    "Erro no Upload de Fotos",
+                    "Não foi possível enviar as fotos. Deseja continuar sem elas?",
+                    [
+                      { text: "Cancelar", onPress: () => resolve(false), style: "cancel" },
+                      { text: "Continuar sem fotos", onPress: () => resolve(true) }
+                    ]
+                  );
+                });
+                
+                if (!continueWithoutPhotos) {
+                  setIsSaving(false);
+                  return;
+                }
+              }
+            }
+
+            // --- PASSO 2: FINALIZAR TUDO (CHAMADA ÚNICA) ---
+            console.log("🚀 Enviando pacote final...");
+
+            // Pegar nome do usuário (se tiver salvo no storage, senão usa o 1º da equipe)
+            // const userName = await AsyncStorage.getItem('userName'); 
+            const signerName = team.split(',')[0].trim(); 
+
+            const finalPayload = {
+              // Relatório
+              viaturaEmpenhada: vehicle.toUpperCase(),
+              equipe: team,
+              descricaoAcoes: description,
+              
+              // GPS
+              latitudeFinal: location.coords.latitude,
+              longitudeFinal: location.coords.longitude,
+              
+              // Assinatura
+              signerName: signerName,
+              signerRole: `Comandante - Viatura ${vehicle.toUpperCase()}`,
+              signatureData: signature, // Base64
+              
+              // Fotos (IDs)
+              photosIds: uploadedPhotoIds
+            };
+
+            // Chamada final para o backend
+            console.log("📤 Payload final:", JSON.stringify(finalPayload, null, 2));
+            const response = await finalizeOccurrenceService(occurrenceId, finalPayload);
+            console.log("✅ Resposta do servidor:", response);
             
             setIsSaving(false);
-            Alert.alert("Sucesso", "Ocorrência finalizada!", [{ text: "OK", onPress: () => navigation.goBack() }]);
-          } catch { 
-            setIsSaving(false); 
-            Alert.alert("Aviso", "Salvo localmente (Back-end em ajuste)."); 
-            navigation.goBack();
+            Alert.alert("Sucesso", "Ocorrência finalizada com sucesso!", [
+              { text: "OK", onPress: () => navigation.goBack() }
+            ]);
+
+          } catch (error: any) {
+            console.error("❌ ERRO AO FINALIZAR:", error);
+            console.error("❌ Detalhes:", {
+              message: error.message,
+              response: error.response?.data,
+              status: error.response?.status,
+              config: error.config?.url
+            });
+            setIsSaving(false);
+            const msg = error.response?.data?.mensagem || error.message || "Erro desconhecido";
+            Alert.alert("Erro ao Finalizar", `${msg}\n\nVerifique sua conexão e tente novamente.`);
           }
         }
       }
@@ -268,26 +387,43 @@ export default function DetailsScreen({ route, navigation }: any) {
           
           <Text style={styles.label}>Viatura Empenhada *</Text>
           <TextInput 
-            style={[styles.input, errors.vehicle && styles.inputError]} 
+            style={[styles.input, errors.vehicle && styles.inputError, isFinalized && styles.inputDisabled]} 
             placeholder="Ex: ABT-45" 
             value={vehicle}
             onChangeText={handleVehicleChange} 
             autoCapitalize="characters" autoCorrect={false} autoComplete="off"
+            editable={!isFinalized}
           />
           {errors.vehicle && <Text style={styles.errorText}>{errors.vehicle}</Text>}
 
           <Text style={styles.label}>Equipe</Text>
-          <TextInput style={styles.input} placeholder="Comandante e auxiliares..." value={team} onChangeText={setTeam} />
+          <TextInput 
+            style={[styles.input, isFinalized && styles.inputDisabled]} 
+            placeholder="Comandante e auxiliares..." 
+            value={team} 
+            onChangeText={setTeam}
+            editable={!isFinalized}
+          />
           
           <Text style={styles.label}>Descrição das Ações</Text>
-          <TextInput style={[styles.input, styles.textArea]} placeholder="Relate o que foi feito no local..." multiline numberOfLines={4} value={description} onChangeText={setDescription} />
+          <TextInput 
+            style={[styles.input, styles.textArea, isFinalized && styles.inputDisabled]} 
+            placeholder="Relate o que foi feito no local..." 
+            multiline 
+            numberOfLines={4} 
+            value={description} 
+            onChangeText={setDescription}
+            editable={!isFinalized}
+          />
 
           {/* EVIDÊNCIAS */}
           <Text style={styles.sectionTitle}>Evidências</Text>
-          <TouchableOpacity style={[styles.actionButton, styles.shadow]} onPress={handleTakePhoto}>
-            <MaterialCommunityIcons name="camera" size={24} color={COLORS.primary} />
-            <Text style={styles.actionText}>Adicionar Foto</Text>
-          </TouchableOpacity>
+          {!isFinalized && (
+            <TouchableOpacity style={[styles.actionButton, styles.shadow]} onPress={handleTakePhoto}>
+              <MaterialCommunityIcons name="camera" size={24} color={COLORS.primary} />
+              <Text style={styles.actionText}>Adicionar Foto</Text>
+            </TouchableOpacity>
+          )}
           {photos.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoContainer}>
               {photos.map((uri, index) => (
@@ -308,10 +444,14 @@ export default function DetailsScreen({ route, navigation }: any) {
                 <Marker coordinate={{ latitude: location.coords.latitude, longitude: location.coords.longitude }} />
               </MapView>
             </View>
-          ) : (
+          ) : !isFinalized ? (
             <TouchableOpacity style={[styles.gpsButtonPlaceholder]} onPress={handleGetGPS} disabled={loadingGPS}>
               {loadingGPS ? <ActivityIndicator color={COLORS.primary} /> : <><MaterialCommunityIcons name="crosshairs-gps" size={30} color={COLORS.primary} /><Text>Capturar Ponto GPS</Text></>}
             </TouchableOpacity>
+          ) : (
+            <View style={styles.noDataBox}>
+              <Text style={styles.noDataText}>Localização não registrada</Text>
+            </View>
           )}
 
           {/* VALIDAÇÃO */}
@@ -321,16 +461,25 @@ export default function DetailsScreen({ route, navigation }: any) {
           <View style={errors.signature ? styles.signatureErrorBox : {}}>
             <SignatureDisplay 
               signature={signature}
-              onEdit={handleOpenSignaturePad}
-              onDelete={handleRemoveSignature}
+              onEdit={!isFinalized ? handleOpenSignaturePad : undefined}
+              onDelete={!isFinalized ? handleRemoveSignature : undefined}
               isLoading={isSaving}
             />
           </View>
           {errors.signature && <Text style={styles.errorText}>{errors.signature}</Text>}
 
-          <TouchableOpacity style={[styles.submitButton, styles.shadow]} onPress={handleSave} disabled={isSaving}>
-            {isSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>FINALIZAR OCORRÊNCIA</Text>}
-          </TouchableOpacity>
+          {!isFinalized && (
+            <TouchableOpacity style={[styles.submitButton, styles.shadow]} onPress={handleSave} disabled={isSaving}>
+              {isSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>FINALIZAR OCORRÊNCIA</Text>}
+            </TouchableOpacity>
+          )}
+          
+          {isFinalized && (
+            <View style={styles.finalizedBanner}>
+              <MaterialCommunityIcons name="check-circle" size={24} color="#2E7D32" />
+              <Text style={styles.finalizedText}>Ocorrência Finalizada</Text>
+            </View>
+          )}
 
         </ScrollView>
       </KeyboardAvoidingView>
@@ -395,4 +544,9 @@ const styles = StyleSheet.create({
   map: { flex: 1 },
   submitButton: { backgroundColor: '#2E7D32', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 20 },
   submitButtonText: { color: '#fff', fontWeight: 'bold' },
+  inputDisabled: { backgroundColor: '#f5f5f5', color: '#999' },
+  noDataBox: { backgroundColor: '#f5f5f5', padding: 20, borderRadius: 12, alignItems: 'center', marginBottom: 20 },
+  noDataText: { color: '#999', fontSize: 14 },
+  finalizedBanner: { backgroundColor: '#E8F5E9', padding: 16, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 20 },
+  finalizedText: { color: '#2E7D32', fontWeight: 'bold', marginLeft: 8, fontSize: 16 },
 });

@@ -6,39 +6,50 @@ import { Occurrence } from '../types/types';
 import { COLORS } from '../constants/theme';
 
 export default function HomeScreen({ navigation }: any) {
-  const [occurrences, setOccurrences] = useState<any[]>([]); // Estado dos dados
-  const [loading, setLoading] = useState(true); // Spinner inicial
-  const [refreshing, setRefreshing] = useState(false); // Spinner de "puxar pra baixo"
+  const [occurrences, setOccurrences] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Função que busca no back-end e adapta para o visual
-const fetchData = async () => {
-  try {
-    const data = await getOccurrences();
-    
-    // --- O TRUQUE DE PERFORMANCE ---
-    // Se tiver muita coisa, pegamos apenas os últimos 30 itens para o teste
-    // O backend manda tudo, mas o celular só processa o finalzinho
-    const recentData = data.length > 30 ? data.slice(-30) : data;
+  const fetchData = async () => {
+    try {
+      const data = await getOccurrences();
+      
+      // 1. FILTRA (Só ativas)
+      const activeData = data.filter((item: any) => {
+         const status = (item.statusGeral || item.situacaoOcorrencia || '').toLowerCase();
+         return status !== 'finalizada' && status !== 'cancelada';
+      });
 
-    const adaptedData = recentData.map((item: Occurrence) => ({
-      id: item._id, 
-      title: item.tipoOcorrencia, 
-      status: item.statusGeral || item.situacaoOcorrencia || 'Aberto',
-      location: `${item.endereco.rua}, ${item.endereco.numero} - ${item.endereco.bairro}`, 
-      time: new Date(item.timestampRecebimento).toLocaleDateString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      originalData: item 
-    }));
+      // 2. LIMITA A 20 ITENS
+      // Pegamos os últimos 20 (slice -20) pois geralmente o banco devolve os antigos primeiro
+      const recentData = activeData.slice(-20);
 
-    // Inverte para o mais novo ficar no topo da lista
-    setOccurrences(adaptedData.reverse());
+      // 3. ADAPTA (Mapeamento atualizado)
+      const adaptedData = recentData.map((item: Occurrence) => ({
+        id: item._id, 
+        
+        // MUDANÇA: Título agora é a Natureza (descrição), se não tiver usa o Tipo
+        title: item.naturezaInicial || item.tipoOcorrencia, 
+        
+        // NOVO: Campo Tipo separado
+        type: item.tipoOcorrencia,
 
-  } catch (error) {
-    Alert.alert('Erro', 'Não foi possível carregar as ocorrências.');
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-};
+        status: item.statusGeral || item.situacaoOcorrencia || 'Aberto',
+        location: `${item.endereco?.rua || 'Rua não inf.'}, ${item.endereco?.numero || 'S/N'}`, 
+        time: item.timestampRecebimento ? new Date(item.timestampRecebimento).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : '--:--',
+        originalData: item 
+      }));
+
+      // Inverte para exibir a mais recente no topo
+      setOccurrences(adaptedData.reverse());
+
+    } catch (error) {
+      // tratamento de erro
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   // Carrega ao abrir a tela
   useEffect(() => {

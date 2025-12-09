@@ -12,8 +12,8 @@ import { COLORS } from '../constants/theme';
 
 interface SignatureDisplayProps {
   signature: string | null;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
   isLoading?: boolean;
 }
 
@@ -43,7 +43,7 @@ export const SignatureDisplay: React.FC<SignatureDisplayProps> = ({
       <TouchableOpacity
         style={styles.emptyContainer}
         onPress={onEdit}
-        disabled={isLoading}
+        disabled={isLoading || !onEdit}
       >
         <MaterialCommunityIcons
           name="draw"
@@ -74,31 +74,37 @@ export const SignatureDisplay: React.FC<SignatureDisplayProps> = ({
         />
       </View>
 
-      <View style={styles.actionContainer}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.editButton]}
-          onPress={onEdit}
-          disabled={isLoading}
-        >
-          <MaterialCommunityIcons
-            name="pencil"
-            size={18}
-            color={COLORS.primary}
-          />
-          <Text style={styles.actionButtonText}>Alterar</Text>
-        </TouchableOpacity>
+      {(onEdit || onDelete) && (
+        <View style={styles.actionContainer}>
+          {onEdit && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.editButton]}
+              onPress={onEdit}
+              disabled={isLoading}
+            >
+              <MaterialCommunityIcons
+                name="pencil"
+                size={18}
+                color={COLORS.primary}
+              />
+              <Text style={styles.actionButtonText}>Alterar</Text>
+            </TouchableOpacity>
+          )}
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={handleDelete}
-          disabled={isLoading}
-        >
-          <MaterialCommunityIcons name="trash-can" size={18} color="#d32f2f" />
-          <Text style={[styles.actionButtonText, styles.deleteButtonText]}>
-            Remover
-          </Text>
-        </TouchableOpacity>
-      </View>
+          {onDelete && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.deleteButton]}
+              onPress={handleDelete}
+              disabled={isLoading}
+            >
+              <MaterialCommunityIcons name="trash-can" size={18} color="#d32f2f" />
+              <Text style={[styles.actionButtonText, styles.deleteButtonText]}>
+                Remover
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </View>
   );
 };

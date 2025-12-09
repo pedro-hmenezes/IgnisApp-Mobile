@@ -34,3 +34,33 @@ export const getOccurrenceById = async (id: string): Promise<Occurrence> => {
     throw error;
   }
 };
+
+export const finalizeOccurrenceService = async (id: string, data: any) => {
+  try {
+    console.log(`🔄 Finalizando ocorrência ${id}...`);
+    console.log('📦 Payload:', JSON.stringify(data, null, 2));
+    
+    // Rota: PATCH /api/occurrences/:id/finalize
+    const response = await api.patch(`/occurrences/${id}/finalize`, data);
+    
+    console.log('✅ Resposta do servidor:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Erro ao finalizar ocorrência:', error);
+    
+    if (error.response) {
+      // O servidor respondeu com um status de erro
+      console.error('Status:', error.response.status);
+      console.error('Dados:', error.response.data);
+      throw new Error(error.response.data?.mensagem || `Erro ${error.response.status}: ${error.response.statusText}`);
+    } else if (error.request) {
+      // A requisição foi feita mas não houve resposta
+      console.error('Sem resposta do servidor');
+      throw new Error('Servidor não respondeu. Verifique sua conexão com a internet.');
+    } else {
+      // Erro ao configurar a requisição
+      console.error('Erro:', error.message);
+      throw error;
+    }
+  }
+};
