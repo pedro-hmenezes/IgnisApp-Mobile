@@ -15,8 +15,8 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { updateOccurrence, getOccurrenceById, finalizeOccurrenceService } from '../services/occurrenceService';
-import { createSignature } from '../services/signatureService'; // Você precisará criar este arquivo
-import { uploadMedia } from '../services/mediaService';       // E este também
+import { createSignature } from '../services/signatureService';
+import { uploadMedia, uploadMultipleMedia, uploadSignature } from '../services/mediaService';
 
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
@@ -36,29 +36,26 @@ export default function DetailsScreen({ route, navigation }: any) {
   // Pega o ID (tenta de todas as formas possíveis para não falhar)
   const occurrenceId = occurrence?._id || occurrence?.originalData?._id || occurrence?.id;
 
-  // --- MUDANÇA 2: O Efeito que busca os dados no servidor ---
-  useEffect(() => {
-    let isActive = true;
-
-    const fetchDetails = async () => {
-      if (!occurrenceId) return;
-      try {
-        // Chama a função nova que criamos no Passo 1
-        const dataFromServer = await getOccurrenceById(occurrenceId);
-        
-        if (isActive && dataFromServer) {
-          console.log("✅ Dados completos atualizados! Solicitante:", dataFromServer.solicitante?.nome);
-          setFullData(dataFromServer);
-        }
-      } catch (error) {
-        console.log("⚠️ Erro ao atualizar detalhes, mantendo dados do cache.");
-      } finally {
-        if (isActive) setLoadingData(false);
+  // --- MUDANÇA 2: Função para carregar dados do servidor ---
+  const loadFullData = async () => {
+    if (!occurrenceId) return;
+    try {
+      const dataFromServer = await getOccurrenceById(occurrenceId);
+      
+      if (dataFromServer) {
+        console.log("✅ Dados completos atualizados! Solicitante:", dataFromServer.solicitante?.nome);
+        setFullData(dataFromServer);
       }
-    };
+    } catch (error) {
+      console.log("⚠️ Erro ao atualizar detalhes, mantendo dados do cache.");
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
-    fetchDetails();
-    return () => { isActive = false; };
+  // --- MUDANÇA 3: O Efeito que busca os dados no servidor ---
+  useEffect(() => {
+    loadFullData();
   }, [occurrenceId]);
 
   // --- MUDANÇA 3: A Lógica de Prioridade ---
@@ -87,7 +84,8 @@ export default function DetailsScreen({ route, navigation }: any) {
   // Estados Hardware
   const [loadingGPS, setLoadingGPS] = useState(false);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<string[]>([]); // URIs locais
+  const [cloudinaryPhotos, setCloudinaryPhotos] = useState<any[]>([]); // Fotos do Cloudinary
   
   // Estados Assinatura
   const [signature, setSignature] = useState<string | null>(null);
@@ -116,6 +114,12 @@ export default function DetailsScreen({ route, navigation }: any) {
           },
           timestamp: Date.now(),
         });
+      }
+
+      // Carrega fotos do Cloudinary se houver
+      if (fullData.media && Array.isArray(fullData.media) && fullData.media.length > 0) {
+        setCloudinaryPhotos(fullData.media);
+        console.log(`📸 ${fullData.media.length} fotos carregadas do Cloudinary`);
       }
     }
   }, [isFinalized, fullData]);
@@ -194,25 +198,28 @@ export default function DetailsScreen({ route, navigation }: any) {
 
             if (photos.length > 0) {
               try {
-                console.log(`📸 Tentando subir ${photos.length} fotos...`);
+                console.log(`📸 Enviando ${photos.length} fotos para Cloudinary...`);
                 
-                // Faz o upload de cada foto e guarda o ID retornado
-                const uploadPromises = photos.map(async (photoUri) => {
-                  const formData = new FormData();
-                  formData.append('occurrenceId', occurrenceId);
-                  formData.append('media', { 
-                    uri: photoUri, 
-                    type: 'image/jpeg', 
-                    name: `evid_${Date.now()}.jpg` 
-                  } as any);
+                // Upload múltiplo para Cloudinary
+                const response = await uploadMultipleMedia(photos, occurrenceId);
+                
+                if (response.sucesso && response.dados) {
+                  // Extrai os IDs das fotos registradas no backend (se houver)
+                  uploadedPhotoIds = response.dados
+                    .map((photo: any) => photo._id)
+                    .filter((id: any) => id); // Remove undefined/null
                   
-                  // Usa o serviço de upload que já configuramos
-                  const response = await uploadMedia(formData);
-                  return response.dados._id; // O back retorna o ID dentro de 'dados._id'
-                });
-
-                uploadedPhotoIds = await Promise.all(uploadPromises);
-                console.log("✅ IDs das fotos gerados:", uploadedPhotoIds);
+                  console.log("✅ Fotos enviadas para Cloudinary");
+                  console.log("📋 IDs registrados no backend:", uploadedPhotoIds);
+                  console.log("🔗 URLs:", response.dados.map((p: any) => p.fileUrl || p.url));
+                  
+                  // Se não tem IDs mas tem URLs, as fotos estão no Cloudinary
+                  if (uploadedPhotoIds.length === 0 && response.dados.length > 0) {
+                    console.warn("⚠️ Fotos no Cloudinary mas sem IDs do backend");
+                  }
+                } else {
+                  throw new Error(response.mensagem || 'Falha no upload');
+                }
               } catch (uploadError: any) {
                 console.warn("⚠️ Erro no upload de fotos:", uploadError.message);
                 // Pergunta ao usuário se quer continuar sem as fotos
@@ -234,7 +241,29 @@ export default function DetailsScreen({ route, navigation }: any) {
               }
             }
 
-            // --- PASSO 2: FINALIZAR TUDO (CHAMADA ÚNICA) ---
+            // --- PASSO 2: ENVIAR ASSINATURA PARA CLOUDINARY ---
+            let signatureUrl = null;
+            
+            if (signature) {
+              try {
+                console.log("✍️ Enviando assinatura para Cloudinary...");
+                const signatureResponse = await uploadSignature(signature, occurrenceId);
+                
+                if (signatureResponse.sucesso && signatureResponse.dados) {
+                  signatureUrl = signatureResponse.dados.fileUrl;
+                  console.log("✅ Assinatura enviada:", signatureUrl);
+                } else {
+                  throw new Error('Falha no upload da assinatura');
+                }
+              } catch (signatureError: any) {
+                console.error("❌ Erro ao enviar assinatura:", signatureError.message);
+                Alert.alert("Erro", "Não foi possível enviar a assinatura. Tente novamente.");
+                setIsSaving(false);
+                return;
+              }
+            }
+
+            // --- PASSO 3: FINALIZAR TUDO (CHAMADA ÚNICA) ---
             console.log("🚀 Enviando pacote final...");
 
             // Pegar nome do usuário (se tiver salvo no storage, senão usa o 1º da equipe)
@@ -251,19 +280,29 @@ export default function DetailsScreen({ route, navigation }: any) {
               latitudeFinal: location.coords.latitude,
               longitudeFinal: location.coords.longitude,
               
-              // Assinatura
+              // Assinatura (agora é URL do Cloudinary!)
               signerName: signerName,
               signerRole: `Comandante - Viatura ${vehicle.toUpperCase()}`,
-              signatureData: signature, // Base64
+              signatureUrl: signatureUrl, // URL do Cloudinary
               
               // Fotos (IDs)
               photosIds: uploadedPhotoIds
             };
 
             // Chamada final para o backend
-            console.log("📤 Payload final:", JSON.stringify(finalPayload, null, 2));
+            console.log("📤 Payload final:");
+            console.log("  - Viatura:", finalPayload.viaturaEmpenhada);
+            console.log("  - Equipe:", finalPayload.equipe);
+            console.log("  - GPS:", finalPayload.latitudeFinal, finalPayload.longitudeFinal);
+            console.log("  - signatureUrl:", finalPayload.signatureUrl); // ✅ URL do Cloudinary
+            console.log("  - Fotos:", finalPayload.photosIds.length);
+            
             const response = await finalizeOccurrenceService(occurrenceId, finalPayload);
             console.log("✅ Resposta do servidor:", response);
+            
+            // Recarrega os dados completos para atualizar a tela com as fotos
+            console.log("🔄 Recarregando dados da ocorrência finalizada...");
+            await loadFullData();
             
             setIsSaving(false);
             Alert.alert("Sucesso", "Ocorrência finalizada com sucesso!", [
@@ -424,12 +463,39 @@ export default function DetailsScreen({ route, navigation }: any) {
               <Text style={styles.actionText}>Adicionar Foto</Text>
             </TouchableOpacity>
           )}
+          
+          {/* Fotos locais (antes de enviar) */}
           {photos.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoContainer}>
-              {photos.map((uri, index) => (
-                <Image key={index} source={{ uri }} style={styles.photo} />
-              ))}
-            </ScrollView>
+            <>
+              <Text style={styles.photoLabel}>Fotos Pendentes ({photos.length})</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoContainer}>
+                {photos.map((uri, index) => (
+                  <Image key={`local-${index}`} source={{ uri }} style={styles.photo} />
+                ))}
+              </ScrollView>
+            </>
+          )}
+
+          {/* Fotos do Cloudinary (já enviadas) */}
+          {cloudinaryPhotos.length > 0 && (
+            <>
+              <View style={styles.photoLabelContainer}>
+                <MaterialCommunityIcons name="cloud-check" size={16} color="#4CAF50" />
+                <Text style={styles.photoLabel}>
+                  Fotos Enviadas ({cloudinaryPhotos.length})
+                </Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoContainer}>
+                {cloudinaryPhotos.map((photo, index) => (
+                  <View key={`cloud-${photo._id || index}`} style={styles.photoWrapper}>
+                    <Image source={{ uri: photo.fileUrl }} style={styles.photo} />
+                    <View style={styles.cloudBadge}>
+                      <MaterialCommunityIcons name="cloud-check" size={12} color="#fff" />
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            </>
           )}
 
           {/* GPS */}
@@ -537,8 +603,12 @@ const styles = StyleSheet.create({
   textArea: { height: 80, textAlignVertical: 'top' },
   actionButton: { backgroundColor: '#fff', padding: 15, borderRadius: 8, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.primary, marginBottom: 10 },
   actionText: { marginLeft: 8, fontWeight: 'bold', color: COLORS.primary },
-  photoContainer: { marginBottom: 10, flexDirection: 'row' },
-  photo: { width: 80, height: 80, borderRadius: 8, borderWidth: 1, borderColor: '#ddd', marginRight: 10 },
+  photoLabelContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 6 },
+  photoLabel: { fontSize: 13, color: '#666', fontWeight: '600' },
+  photoContainer: { marginBottom: 15, flexDirection: 'row' },
+  photoWrapper: { position: 'relative', marginRight: 10 },
+  photo: { width: 80, height: 80, borderRadius: 8, borderWidth: 1, borderColor: '#ddd' },
+  cloudBadge: { position: 'absolute', top: 4, right: 4, backgroundColor: '#4CAF50', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
   gpsButtonPlaceholder: { height: 100, backgroundColor: '#e0e0e0', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   mapPreviewContainer: { height: 150, borderRadius: 12, overflow: 'hidden', marginBottom: 20, backgroundColor: '#fff' },
   map: { flex: 1 },
